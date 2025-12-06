@@ -286,10 +286,16 @@ class MainWindow(QtWidgets.QMainWindow):
 
         top_bar = QtWidgets.QHBoxLayout()
         self.page_title = QtWidgets.QLabel("Dashboard")
+                # --- REFRESH BUTTON (new) ---
+        self.refresh_btn = QtWidgets.QPushButton("Refresh")
+        self.refresh_btn.setStyleSheet("background:#1e97d6; padding:8px 14px; border-radius:6px;")
+        self.refresh_btn.clicked.connect(self.refresh_dashboard)
+        top_bar.addWidget(self.refresh_btn)
+
         self.page_title.setStyleSheet("font-size: 16pt; font-weight: 700;")
         top_bar.addWidget(self.page_title)
         top_bar.addStretch()
-        last_login = QtWidgets.QLabel(f"Logged in as: {self.admin_user['username'] if self.admin_user else 'admin'}")
+        last_login = QtWidgets.QLabel(f"Logged admin as: {self.admin_user['username'] if self.admin_user else 'admin'}")
         last_login.setStyleSheet("color:#9ecbdc;")
         top_bar.addWidget(last_login)
         content_layout.addLayout(top_bar)
@@ -416,6 +422,48 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception as e:
             print("fetch logs error:", e)
             return []
+
+    def refresh_dashboard(self):
+        """Refresh all dashboard data safely."""
+        try:
+            dash = self.pages.widget(0)          
+            dash_layout = dash.layout()       
+
+            cards_row = dash_layout.itemAt(0).layout()  
+
+            # --- Card 1: Registered Users ---
+            card1 = cards_row.itemAt(0).widget()
+            card1_layout = card1.layout()
+            lbl_users = card1_layout.itemAt(1).widget()  
+            lbl_users.setText(self._get_count_registers())
+
+            # --- Card 2: Vehicles ---
+            card2 = cards_row.itemAt(1).widget()
+            card2_layout = card2.layout()
+            lbl_vehicles = card2_layout.itemAt(1).widget()
+            lbl_vehicles.setText(self._get_count_vehicles())
+
+            # --- Card 3: Last Entry ---
+            card3 = cards_row.itemAt(2).widget()
+            card3_layout = card3.layout()
+            lbl_entry = card3_layout.itemAt(1).widget()
+            lbl_entry.setText(self._get_last_entry())
+
+            # ===== Refresh logs list =====
+            logs_card = dash_layout.itemAt(1).widget()  
+            logs_layout = logs_card.layout()
+            logs_list = logs_layout.itemAt(1).widget() 
+
+            logs_list.clear()
+            for l in self._fetch_recent_logs(limit=8):
+                name = l["name"] if "name" in l and l["name"] else "Unknown"
+                logs_list.addItem(f"{l['timestamp']} - {name} - {l['direction']}")
+
+            QtWidgets.QMessageBox.information(self, "Refreshed", "Dashboard updated successfully.")
+
+        except Exception as e:
+            QtWidgets.QMessageBox.warning(self, "Error", f"Dashboard refresh failed:\n{e}")
+
 
     # ---------- page actions ----------
     def _activate_page(self, index):
