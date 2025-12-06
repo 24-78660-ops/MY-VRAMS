@@ -1,6 +1,6 @@
 from PyQt5 import QtWidgets
 from db_con import DBConnection
-from qr_generator import generate_user_qr
+from qr_generator import generate_vehicle_qr   # <-- changed: use vehicle QR, not user QR
 
 db = DBConnection()
 
@@ -16,7 +16,7 @@ class VehicleForm(QtWidgets.QDialog):
         layout = QtWidgets.QVBoxLayout(self)
 
         self.vtype_entry = QtWidgets.QLineEdit()
-        self.vtype_entry.setPlaceholderText("Vehicle Type (e.g., Car)")
+        self.vtype_entry.setPlaceholderText("Vehicle Type (e.g. Car)")
         layout.addWidget(self.vtype_entry)
 
         self.plate_entry = QtWidgets.QLineEdit()
@@ -37,7 +37,7 @@ class VehicleForm(QtWidgets.QDialog):
         layout.addWidget(register_btn)
 
     def register_vehicle(self):
-        # get inputs from the form (simple comment)
+        # get inputs from the form
         vtype = self.vtype_entry.text().strip()
         plate = self.plate_entry.text().strip()
         license_no = self.license_entry.text().strip()
@@ -54,22 +54,21 @@ class VehicleForm(QtWidgets.QDialog):
             QtWidgets.QMessageBox.critical(self, "DB Error", f"Failed to insert vehicle:\n{e}")
             return
 
+        # ---------- QR GENERATION (FIXED) ----------
         try:
-            sticker_code, qr_file = generate_user_qr(
-                user_id=self.user_info['id'],
-                name=self.user_info.get('name'),
-                age=self.user_info.get('age'),
-                address=self.user_info.get('address'),
-                contact=self.user_info.get('contact_number'),
-                department=self.user_info.get('department'),
-                sr_code=self.user_info.get('sr_code'),
-                work_type=self.user_info.get('work_type'),
-                vehicle_plate=plate
+            sticker_code, qr_file = generate_vehicle_qr(vehicle_id)
+
+            db.update(
+                "UPDATE vehicle SET sticker_no=?, sticker_file=? WHERE id=?",
+                (sticker_code, qr_file, vehicle_id)
             )
-            db.update("UPDATE vehicle SET sticker_no=?, sticker_file=? WHERE id=?", (sticker_code, qr_file, vehicle_id))
         except Exception as e:
-            # non-fatal — vehicle inserted but QR generation failed
-            QtWidgets.QMessageBox.warning(self, "QR Error", f"Vehicle added but failed to generate QR:\n{e}")
+    
+            QtWidgets.QMessageBox.warning(
+                self,
+                "QR Error",
+                f"Vehicle added but failed to generate QR:\n{e}"
+            )
             self.accept()
             return
 
