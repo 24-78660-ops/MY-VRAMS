@@ -91,13 +91,14 @@ class UserVehicleDisplay(QtWidgets.QDialog):
         self.vehicle_layout = QtWidgets.QHBoxLayout(self.vehicle_tab)
 
         self.vehicle_table = QtWidgets.QTableWidget()
-        
-        # REMOVE VEHICLE ID — KEEP ONLY USER ID
-        self.vehicle_table.setColumnCount(10)
+
+        # ADD Vehicle ID column (hidden) + User ID column
+        self.vehicle_table.setColumnCount(11)
         self.vehicle_table.setHorizontalHeaderLabels(
-            ["User ID", "User Type", "Plate", "License", "Sticker",
-            "Color", "Status", "Last Seen", "Owner Name", "Owner Sticker"]
+            ["Vehicle ID", "User ID", "User Type", "Plate", "License", "Sticker",
+             "Color", "Status", "Last Seen", "Owner Name", "Owner Sticker"]
         )
+        self.vehicle_table.setColumnHidden(0, True)  # Hide Vehicle ID
 
         # REMOVE ROW NUMBERS
         self.vehicle_table.verticalHeader().setVisible(False)
@@ -152,7 +153,6 @@ class UserVehicleDisplay(QtWidgets.QDialog):
 
         for u in all_users:
 
-            # filter by type and search text
             if filter_type != "All" and u["type"] != filter_type:
                 continue
 
@@ -168,16 +168,13 @@ class UserVehicleDisplay(QtWidgets.QDialog):
                 u["contact_number"], u["department"], u["sr_code"], u["work_type"]
             ]
 
-            # fill table cells
             for i, val in enumerate(data):
                 self.user_table.setItem(row, i, QtWidgets.QTableWidgetItem(str(val or "")))
 
-            # load QR image if exists
             if u["qr_file"] and os.path.exists(u["qr_file"]):
                 pix = QtGui.QPixmap(u["qr_file"]).scaled(220, 220, QtCore.Qt.KeepAspectRatio)
                 self.qr_images_user[u["id"]] = pix
 
-        # auto-select first row
         if self.user_table.rowCount() > 0:
             self.user_table.selectRow(0)
             self.show_user_qr()
@@ -209,9 +206,8 @@ class UserVehicleDisplay(QtWidgets.QDialog):
             row = self.vehicle_table.rowCount()
             self.vehicle_table.insertRow(row)
 
-            # REMOVE vehicle id — ONLY user id remains
             data = [
-                v["user_id"], v["user_type"], v["plate"],
+                v["id"], v["user_id"], v["user_type"], v["plate"],
                 v["license_no"], v["sticker_no"], v["vcolor"],
                 v["status"], v["last_seen"] or "Never",
                 v["owner_name"], v["owner_sticker"]
@@ -220,9 +216,10 @@ class UserVehicleDisplay(QtWidgets.QDialog):
             for i, val in enumerate(data):
                 self.vehicle_table.setItem(row, i, QtWidgets.QTableWidgetItem(str(val or "")))
 
+            # FIX: Use VEHICLE ID for QR
             if v["sticker_file"] and os.path.exists(v["sticker_file"]):
                 pix = QtGui.QPixmap(v["sticker_file"]).scaled(220, 220, QtCore.Qt.KeepAspectRatio)
-                self.qr_images_vehicle[v["user_id"]] = pix
+                self.qr_images_vehicle[v["id"]] = pix
 
         if self.vehicle_table.rowCount() > 0:
             self.vehicle_table.selectRow(0)
@@ -232,7 +229,6 @@ class UserVehicleDisplay(QtWidgets.QDialog):
     # DISPLAY FUNCTIONS
     # ===================================================================
     def show_user_qr(self):
-        # show selected user's QR
         row = self.user_table.currentRow()
         if row < 0:
             return
@@ -250,37 +246,35 @@ class UserVehicleDisplay(QtWidgets.QDialog):
         if row < 0:
             return
 
-        # load QR using USER ID
-        uid = int(self.vehicle_table.item(row, 0).text())
-        pix = self.qr_images_vehicle.get(uid)
+        # FIX: Load QR using VEHICLE ID (column 0)
+        vid = int(self.vehicle_table.item(row, 0).text())
+        pix = self.qr_images_vehicle.get(vid)
 
         if pix:
             self.vehicle_qr_label.setPixmap(pix)
         else:
             self.vehicle_qr_label.setText("No QR")
 
-        # read values safely
         values = [self.vehicle_table.item(row, i).text() for i in range(self.vehicle_table.columnCount())]
 
-        # Updated indexes (0–9)
         self.vehicle_info_label.setText(
-            f"User ID: {values[0]}\n"
-            f"Type: {values[1]}\n"
-            f"Plate: {values[2]}\n"
-            f"License: {values[3]}\n"
-            f"Sticker: {values[4]}\n"
-            f"Color: {values[5]}\n"
-            f"Status: {values[6]}\n"
-            f"Last Seen: {values[7]}\n"
-            f"Owner: {values[8]}\n"
-            f"Owner Sticker: {values[9]}"
+            f"Vehicle ID: {values[0]}\n"
+            f"User ID: {values[1]}\n"
+            f"Type: {values[2]}\n"
+            f"Plate: {values[3]}\n"
+            f"License: {values[4]}\n"
+            f"Sticker: {values[5]}\n"
+            f"Color: {values[6]}\n"
+            f"Status: {values[7]}\n"
+            f"Last Seen: {values[8]}\n"
+            f"Owner: {values[9]}\n"
+            f"Owner Sticker: {values[10]}"
         )
 
     # ===================================================================
     # ACTIONS
     # ===================================================================
     def delete_user(self):
-        # delete selected user + all their vehicles
         row = self.user_table.currentRow()
         if row < 0:
             return
@@ -294,10 +288,9 @@ class UserVehicleDisplay(QtWidgets.QDialog):
             self.db.delete("DELETE FROM vehicle WHERE user_id=?", (uid,))
             self.db.delete("DELETE FROM register WHERE id=?", (uid,))
 
-            self.load_data()  # reload tables after delete
+            self.load_data()
 
     def update_user(self):
-        # open a dialog to edit selected user's information
         row = self.user_table.currentRow()
         if row < 0:
             return
@@ -312,7 +305,6 @@ class UserVehicleDisplay(QtWidgets.QDialog):
         dlg.setWindowTitle("Update User")
         form = QtWidgets.QFormLayout(dlg)
 
-        # pre-fill user data
         name = QtWidgets.QLineEdit(user["name"])
         age = QtWidgets.QLineEdit(str(user["age"]))
         address = QtWidgets.QLineEdit(user["address"])
@@ -336,7 +328,6 @@ class UserVehicleDisplay(QtWidgets.QDialog):
         buttons.accepted.connect(dlg.accept)
         buttons.rejected.connect(dlg.reject)
 
-        # save updated data
         if dlg.exec_() == QtWidgets.QDialog.Accepted:
 
             self.db.update("""
@@ -348,28 +339,28 @@ class UserVehicleDisplay(QtWidgets.QDialog):
                 dept.text(), sr_code.text(), work.text(), uid
             ))
 
-            self.load_data()  # simple comment: refresh table after update
+            self.load_data()
 
     def delete_vehicle(self):
-        # delete selected vehicle only
         row = self.vehicle_table.currentRow()
         if row < 0:
             return
 
+        # FIX: delete by VEHICLE ID
         vid = int(self.vehicle_table.item(row, 0).text())
 
         if QtWidgets.QMessageBox.question(self, "Delete Vehicle", "Confirm delete?") \
                 == QtWidgets.QMessageBox.Yes:
 
             self.db.delete("DELETE FROM vehicle WHERE id=?", (vid,))
-            self.load_data()  # refresh table after delete
+            self.load_data()
 
     def update_vehicle(self):
-        # open a dialog to edit selected vehicle details
         row = self.vehicle_table.currentRow()
         if row < 0:
             return
 
+        # FIX: update by VEHICLE ID
         vid = int(self.vehicle_table.item(row, 0).text())
 
         v = self.db.fetch_one("SELECT * FROM vehicle WHERE id=?", (vid,))
@@ -380,7 +371,6 @@ class UserVehicleDisplay(QtWidgets.QDialog):
         dlg.setWindowTitle("Update Vehicle")
         form = QtWidgets.QFormLayout(dlg)
 
-        # editable vehicle values
         plate = QtWidgets.QLineEdit(v["plate"])
         license_no = QtWidgets.QLineEdit(v["license_no"])
         sticker_no = QtWidgets.QLineEdit(v["sticker_no"])
@@ -401,7 +391,6 @@ class UserVehicleDisplay(QtWidgets.QDialog):
         buttons.accepted.connect(dlg.accept)
         buttons.rejected.connect(dlg.reject)
 
-        # save updated data
         if dlg.exec_() == QtWidgets.QDialog.Accepted:
             self.db.update("""
                 UPDATE vehicle
@@ -410,4 +399,4 @@ class UserVehicleDisplay(QtWidgets.QDialog):
             """, (plate.text(), license_no.text(), sticker_no.text(),
                 vcolor.text(), status.text(), vid))
 
-            self.load_data()  # simple comment: refresh table after update
+            self.load_data()
